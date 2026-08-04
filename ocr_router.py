@@ -16,10 +16,10 @@ INSTRUCTION = "Extract all text from this handwritten page exactly as written, p
 
 def _load_handwriting_model():
     if _model_cache["model"] is None:
-        from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
+        from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
         from peft import PeftModel
 
-        base_model = Qwen2VLForConditionalGeneration.from_pretrained(
+        base_model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
             "Qwen/Qwen2.5-VL-7B-Instruct",
             torch_dtype=torch.float16,
             device_map="auto",
