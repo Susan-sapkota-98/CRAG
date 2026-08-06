@@ -21,8 +21,8 @@ def _load_handwriting_model():
 
         base_model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
             "Qwen/Qwen2.5-VL-7B-Instruct",
-            torch_dtype=torch.float16,
-            device_map="auto",
+            torch_dtype=torch.float32,   # CPU ma float16 le pani issue dina sakcha, float32 safer
+            low_cpu_mem_usage=True,
         )
         model = PeftModel.from_pretrained(base_model, "models/english_ocr_fullpage_lora")
         processor = AutoProcessor.from_pretrained("Qwen/Qwen2.5-VL-7B-Instruct")
