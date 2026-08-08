@@ -93,7 +93,7 @@ with st.expander("🖼️ Upload a scanned image / handwritten page", expanded=F
 # -----------------------------
 # Question box
 # -----------------------------
-question = st.text_input("Question sodhnu hos:", placeholder="e.g. what is AI?")
+question = st.text_input("Ask the Question:", placeholder="e.g. what is AI?")
 
 col1, col2 = st.columns([1, 5])
 with col1:
