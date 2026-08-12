@@ -89,7 +89,6 @@ with st.expander("🖼️ Upload a scanned image / handwritten page", expanded=F
 
             st.success(f"'{img_file.name}' processed ({img_mode} mode). Index updated.")
 
-
 # -----------------------------
 # Question box
 # -----------------------------
