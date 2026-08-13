@@ -14,7 +14,6 @@ def load_graph_module():
     import crag_graph
     return crag_graph
 
-
 cg = load_graph_module()
 app = cg.app
 
