@@ -3,3 +3,6 @@ documents/
 
 *.safetensors
 *.pdf
+
+__pycache__/
+faiss_index/
