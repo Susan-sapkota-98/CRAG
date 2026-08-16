@@ -14,7 +14,6 @@ def load_graph_module():
     import crag_graph
     return crag_graph
 
-
 cg = load_graph_module()
 app = cg.app
 
@@ -88,7 +87,6 @@ with st.expander("🖼️ Upload a scanned image / handwritten page", expanded=F
                 os.remove(tmp_path)
 
             st.success(f"'{img_file.name}' processed ({img_mode} mode). Index updated.")
-
 
 # -----------------------------
 # Question box
