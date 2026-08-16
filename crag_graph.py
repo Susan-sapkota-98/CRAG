@@ -3,6 +3,7 @@ from typing import List, TypedDict
 import re
 from PIL import Image
 from ocr_router import run_ocr
+import time
 
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_ollama import ChatOllama, OllamaEmbeddings
@@ -91,6 +92,38 @@ def init_index():
         _store["vector_store"] = None
 
 
+def _add_chunks_in_batches(chunks: List[Document], batch_size: int = 32, max_retries: int = 3):
+    """
+    Feeds chunks to Ollama for embedding in small batches instead of one
+    giant request, so Ollama doesn't OOM/crash on large PDFs. Retries a
+    batch a few times before giving up, in case Ollama is briefly busy.
+    """
+
+    if not chunks:
+        return
+
+    def add_with_retry(batch, is_first):
+        for attempt in range(max_retries):
+            try:
+                if is_first and _store["vector_store"] is None:
+                    _store["vector_store"] = FAISS.from_documents(batch, embeddings)
+                else:
+                    _store["vector_store"].add_documents(batch)
+                return
+            except Exception:
+                if attempt == max_retries - 1:
+                    raise
+                time.sleep(2 * (attempt + 1))
+
+    first_batch = chunks[:batch_size]
+    remaining = chunks[batch_size:]
+
+    add_with_retry(first_batch, is_first=True)
+
+    for i in range(0, len(remaining), batch_size):
+        add_with_retry(remaining[i:i + batch_size], is_first=False)
+
+
 def add_pdf_to_index(pdf_path: str, mode: str = "add"):
     """
     mode = "replace" -> naya PDF le purano index replace garcha
@@ -98,13 +131,12 @@ def add_pdf_to_index(pdf_path: str, mode: str = "add"):
     """
     chunks = _load_pdf_chunks(pdf_path)
 
-    if mode == "replace" or _store["vector_store"] is None:
-        _store["vector_store"] = FAISS.from_documents(chunks, embeddings)
-    else:
-        _store["vector_store"].add_documents(chunks)
+    if mode == "replace":
+        _store["vector_store"] = None
+
+    _add_chunks_in_batches(chunks, batch_size=32)
 
     _store["vector_store"].save_local(INDEX_PATH)
-
 
 def add_image_to_index(image_path: str, engine: str, mode: str = "add"):
     """
@@ -119,10 +151,18 @@ def add_image_to_index(image_path: str, engine: str, mode: str = "add"):
     )
     chunks = RecursiveCharacterTextSplitter(chunk_size=900, chunk_overlap=150).split_documents([doc])
 
-    if mode == "replace" or _store["vector_store"] is None:
-        _store["vector_store"] = FAISS.from_documents(chunks, embeddings)
-    else:
-        _store["vector_store"].add_documents(chunks)
+    # if mode == "replace" or _store["vector_store"] is None:
+    #     _store["vector_store"] = FAISS.from_documents(chunks, embeddings)
+    # else:
+    #     _store["vector_store"].add_documents(chunks)
+
+    # _store["vector_store"].save_local(INDEX_PATH)
+    
+    
+    if mode == "replace":
+        _store["vector_store"] = None
+
+    _add_chunks_in_batches(chunks, batch_size=32)
 
     _store["vector_store"].save_local(INDEX_PATH)
 
@@ -207,7 +247,13 @@ def eval_each_doc_node(state: State) -> State:
     docs = state["docs"]
 
     inputs = [{"question": q, "chunk": d.page_content} for d in docs]
-    outs = doc_eval_chain.batch(inputs)
+    
+    # Process in smaller batches to avoid GPU OOM
+    batch_size = 2  # Adjust if needed (1-3 recommended for most GPUs)
+    outs = []
+    for i in range(0, len(inputs), batch_size):
+        batch = inputs[i:i+batch_size]
+        outs.extend(doc_eval_chain.batch(batch))
 
     scores: List[float] = [o.score for o in outs]
     good: List[Document] = [d for d, s in zip(docs, scores) if s > LOWER_TH]
@@ -278,6 +324,7 @@ def refine(state: State) -> State:
         results = filter_chain.batch(inputs)  # parallel instead of one-by-one
         kept: List[str] = [s for s, r in zip(strips, results) if r.keep]
     else:
+        
         kept = []
 
     refined_context = "\n".join(kept).strip()
