@@ -2,8 +2,12 @@ import pytesseract
 from PIL import Image
 import torch
 import pytesseract
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
+#for windows
+# pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+
+#for linux
+pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 # ---- Nepali printed (Tesseract) ----
 def ocr_nepali_printed(image: Image.Image) -> str:
     return pytesseract.image_to_string(image, lang="nep")

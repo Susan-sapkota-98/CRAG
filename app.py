@@ -29,9 +29,15 @@ if "just_answered" not in st.session_state:
 # PDF Upload (supports multiple files)
 # -----------------------------
 with st.expander("📤 Upload a PDF to add to knowledge base", expanded=False):
+    pdf_type = st.radio("PDF type", ["Typed/digital PDF", "Scanned/printed PDF (needs OCR)"])
+
     uploaded_files = st.file_uploader(
         "Choose PDF(s)", type=["pdf"], accept_multiple_files=True
     )
+
+    if pdf_type == "Scanned/printed PDF (needs OCR)":
+        ocr_lang = st.selectbox("Language", ["nep", "eng"], format_func=lambda x: "Nepali" if x == "nep" else "English")
+
     mode_label = st.selectbox(
         "How to do index?",
         ["Add to existing index (accumulate)", "Replace existing index (start fresh)"],
@@ -46,13 +52,16 @@ with st.expander("📤 Upload a PDF to add to knowledge base", expanded=False):
                         tmp.write(uploaded_file.read())
                         tmp_path = tmp.name
 
-                    # First file respects chosen mode; rest always "add" so they don't wipe each other out
                     current_mode = mode if i == 0 else "add"
-                    cg.add_pdf_to_index(tmp_path, mode=current_mode)
+
+                    if pdf_type == "Scanned/printed PDF (needs OCR)":
+                        cg.add_scanned_pdf_to_index(tmp_path, lang=ocr_lang, mode=current_mode)
+                    else:
+                        cg.add_pdf_to_index(tmp_path, mode=current_mode)
+
                     os.remove(tmp_path)
 
             st.success(f"{len(uploaded_files)} PDF(s) added ({mode} mode). Index updated.")
-
 
 # -----------------------------
 # Image / handwritten upload (new block added for OCR routing)

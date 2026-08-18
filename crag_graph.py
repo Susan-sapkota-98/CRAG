@@ -3,7 +3,10 @@ from typing import List, TypedDict
 import re
 from PIL import Image
 from ocr_router import run_ocr
+from pdf2image import convert_from_path
 import time
+import pytesseract
+pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_ollama import ChatOllama, OllamaEmbeddings
@@ -139,11 +142,11 @@ def add_pdf_to_index(pdf_path: str, mode: str = "add"):
     _store["vector_store"].save_local(INDEX_PATH)
 
 def add_image_to_index(image_path: str, engine: str, mode: str = "add"):
-    """
-    engine: 'nepali_printed' | 'english_printed' | 'english_handwritten'
-    """
     image = Image.open(image_path).convert("RGB")
     text = run_ocr(image, engine)
+
+    # Clean invisible/zero-width characters that can confuse embeddings
+    text = text.replace("\u200c", "").replace("\u200d", "")
 
     doc = Document(
         page_content=text,
@@ -151,21 +154,36 @@ def add_image_to_index(image_path: str, engine: str, mode: str = "add"):
     )
     chunks = RecursiveCharacterTextSplitter(chunk_size=900, chunk_overlap=150).split_documents([doc])
 
-    # if mode == "replace" or _store["vector_store"] is None:
-    #     _store["vector_store"] = FAISS.from_documents(chunks, embeddings)
-    # else:
-    #     _store["vector_store"].add_documents(chunks)
-
-    # _store["vector_store"].save_local(INDEX_PATH)
-    
-    
     if mode == "replace":
         _store["vector_store"] = None
 
     _add_chunks_in_batches(chunks, batch_size=32)
-
     _store["vector_store"].save_local(INDEX_PATH)
 
+def add_scanned_pdf_to_index(pdf_path: str, lang: str = "nep", mode: str = "add"):
+    """
+    For image-based/scanned PDFs where PyPDFLoader extracts no text.
+    lang: 'nep' | 'eng'
+    """
+    pages = convert_from_path(pdf_path, dpi=200)
+
+    all_chunks = []
+    for i, page_img in enumerate(pages, start=1):
+        text = pytesseract.image_to_string(page_img, lang=lang)
+        if not text.strip():
+            continue
+        doc = Document(
+            page_content=text,
+            metadata={"source": os.path.basename(pdf_path), "page": i, "ocr_engine": f"tesseract_{lang}"}
+        )
+        chunks = RecursiveCharacterTextSplitter(chunk_size=900, chunk_overlap=150).split_documents([doc])
+        all_chunks.extend(chunks)
+
+    if mode == "replace":
+        _store["vector_store"] = None
+
+    _add_chunks_in_batches(all_chunks, batch_size=32)
+    _store["vector_store"].save_local(INDEX_PATH)
 
 def get_retriever():
     if _store["vector_store"] is None:
